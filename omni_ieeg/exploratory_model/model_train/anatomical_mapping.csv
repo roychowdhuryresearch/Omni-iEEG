@@ -1,0 +1,61 @@
+label,subcategory,Proposal_1,Proposal_2
+caudalanteriorcingulate,limbic,Anterior cingulate,Cingulate
+caudalmiddlefrontal,frontal,Motor/premotor,Motor/premotor
+cuneus,occipital,Occipital,Occipital
+entorhinal,limbic,Mesial temporal,Mesial temporal
+fusiform,temporal,Inferior temporal,Inferior temporal
+inferiorparietal,parietal,Inferior parietal,Inferior parietal
+inferiortemporal,temporal,Inferior temporal,Inferior temporal
+isthmuscingulate,limbic,Posterior cingulate,Cingulate
+lateraloccipital,occipital,Occipital,Occipital
+lateralorbitofrontal,limbic,Orbitofrontal,Prefrontal
+lingual,occipital,Occipital,Occipital
+medialorbitofrontal,limbic,Orbitofrontal,Prefrontal
+middletemporal,temporal,Inferior temporal,Inferior temporal
+parahippocampal,limbic,Mesial temporal,Mesial temporal
+paracentral,frontal,Motor/premotor,Motor/premotor
+parsopercularis,frontal,Inferior frontal,Prefrontal
+parsorbitalis,frontal,Orbitofrontal,Prefrontal
+parstriangularis,frontal,Inferior frontal,Prefrontal
+pericalcarine,occipital,Occipital,Occipital
+postcentral,parietal,Somatosensory,Somatosensory
+posteriorcingulate,limbic,Posterior cingulate,Cingulate
+precentral,frontal,Motor/premotor,Motor/premotor
+precuneus,parietal,Superior parietal,Superior parietal
+rostralanteriorcingulate,limbic,Anterior cingulate,Cingulate
+rostralmiddlefrontal,frontal,Dorsolateral frontal,Prefrontal
+superiorfrontal,frontal,Dorsolateral frontal,Prefrontal
+superiorparietal,parietal,Superior parietal,Superior parietal
+superiortemporal,temporal,Superior temporal,Superior temporal
+supramarginal,parietal,Inferior parietal,Inferior parietal
+transversetemporal,temporal,Superior temporal,Superior temporal
+insula,limbic,Insula,Insula
+CerebralCortex,-1,Other/Subcortical,Other/Subcortical
+lateralventricle,-1,Other/Subcortical,Other/Subcortical
+InferiorLateralVentricle,-1,Other/Subcortical,Other/Subcortical
+Cerebellum_WhiteMatter,-1,Other/Subcortical,Other/Subcortical
+CerebellumCortex,-1,Other/Subcortical,Other/Subcortical
+thalamus,-1,Other/Subcortical,Other/Subcortical
+Caudate,-1,Other/Subcortical,Other/Subcortical
+putamen,-1,Other/Subcortical,Other/Subcortical
+Pallidum,-1,Other/Subcortical,Other/Subcortical
+Hippocampus,limbic,Mesial temporal,Mesial temporal
+amygdala,limbic,Mesial temporal,Mesial temporal
+Lesion,-1,Other/Subcortical,Other/Subcortical
+Vessel,-1,Other/Subcortical,Other/Subcortical
+ThirdVentricle,-1,Other/Subcortical,Other/Subcortical
+FourthVentricle,-1,Other/Subcortical,Other/Subcortical
+BrainStem,-1,Other/Subcortical,Other/Subcortical
+CerebrospinalFluid,-1,Other/Subcortical,Other/Subcortical
+Outside,-1,Other/Subcortical,Other/Subcortical
+WM,-1,Other/Subcortical,Other/Subcortical
+N.A.,-1,Other/Subcortical,Other/Subcortical
+bankssts,temporal,Superior temporal,Superior temporal
+temporalpole,temporal,Inferior temporal,Inferior temporal
+frontalpole,frontal,Anterior frontal,Prefrontal
+inferioroccipital,occipital,Occipital,Occipital
+-1,-1,-1,-1
+Thalamus,-1,Other/Subcortical,Other/Subcortical
+Putamen,-1,Other/Subcortical,Other/Subcortical
+speriorfrontal,frontal,Dorsolateral frontal,Prefrontal
+lateraloocipital,occipital,Occipital,Occipital

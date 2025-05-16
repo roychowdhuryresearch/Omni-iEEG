@@ -25,6 +25,7 @@ setup(
         "mne",
         "edfio",
         "transformers",
-        "pyarrow"
+        "pyarrow",
+        "einops"
     ],
 )
