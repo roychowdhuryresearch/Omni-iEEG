@@ -136,18 +136,28 @@ class Inferencer():
         return df
 
 if __name__ == "__main__":
-    model_name = "cnn" # cnn, vit, lstm, transformer, timesnet
-    device = "cuda:1" if torch.cuda.is_available() else "cpu"
-    label_name = "3label"
-    model_path = "/mnt/SSD1/nipsdataset/event_training/model_output/cnn_3label/2025-05-13/run1/best_model.pth"
-    output_dir = f"/mnt/SSD1/nipsdataset/channel_training/new_event_model_preds/{model_name}/{label_name}/"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_name", type=str, required=True, choices=["cnn", "vit", "lstm", "transformer", "timesnet"], help="Model name (cnn, vit, lstm, transformer, timesnet)")
+    parser.add_argument("--device", type=str, default="cuda:0" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--output_dir", type=str, default="./model_output")
+    parser.add_argument("--feature_path", type=str, required=True, help="Path to the feature npz files you get when running event_model/legacy_model_inference/hfo_features.py")
+    parser.add_argument("--label_name", type=str, default="3label")
+    parser.add_argument("--model_path", type=str, required=True, help="Path to the model checkpoint you get when running event_model/train/train_3label.py")
+    args = parser.parse_args()
+    model_name = args.model_name
+    device = args.device
+    output_dir = args.output_dir
+    feature_path = args.feature_path
+    label_name = args.label_name
+    model_path = args.model_path
+    output_dir = os.path.join(output_dir, model_name, label_name)
     os.makedirs(output_dir, exist_ok=True)
     print(f"Saving model outputs to: {output_dir}")
     model_config = model_preprocessing_configs[model_name]["model_config"]
     model_config['model_path'] = model_path
     pre_processing_config = model_preprocessing_configs[model_name]["preprocessing_config"]
     data_config = {
-        "feature_path": "/mnt/SSD1/nipsdataset/legacy_model_channel/testset_hfo_features",
+        "feature_path": feature_path,
         "output_dir": output_dir,
         "time_window_ms": 2000
     }
