@@ -17,15 +17,19 @@ There is no hard dependency on the python version. We do recommend using python 
 
 ### Data Download
 
-Please use the following command to download the dataset.
+!!! We currently hosting our dataset on huggingface. We are also working on hosting the dataset on other platforms such as OpenNeuro, stay tuned!
+
+Please use the following command to download the dataset from the huggingface dataset. Please note that our full dataset is very large, around 150GB.
 
 ```bash
-python omni_ieeg/datalodera/download_dataset.py --dataset_path /path/to/save/dataset
+python omni_ieeg/dataloader/download_dataset.py --output_dir /path/to/save/dataset --file sub-openieegDetroit001.tar
 ```
-Please note that this will download the full dataset, which is around 150GB.
+Please note that if you do not specify the file, this will download the full dataset.
 Since the original data is in BIDS format with many edf files, we choose to compress the data and upload. 
 The above script will download the compressed data and perform unzipping, which might take a while and require a lot of memory / space.
-If you only want to download the metadata, like subject information, plase do
+If you only want to download the metadata, like subject information, here is a list of files you can download:
+- `--file sub-openieegDetroit001.tar`: This will download the compressed data for subject Detroit001.
+- `--folder derivatives/`: This will download all the files in the derivatives folder, including the HFO detection results, training and testing split information,and the doctor's annotation for HFOs.
 
 ### Data format
 
