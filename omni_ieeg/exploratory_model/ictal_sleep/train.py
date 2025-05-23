@@ -9,7 +9,7 @@ import numpy as np
 from torch.utils.data import dataset, Subset, WeightedRandomSampler, random_split
 
 from omni_ieeg.channel_model.channel_model_train.dataloader import ChannelDataset
-from omni_ieeg.anatomical_model.anatomical_model_train.configs import model_preprocessing_configs
+from omni_ieeg.exploratory_model.ictal_sleep.configs import model_preprocessing_configs
 from torch.utils.data import  DataLoader, ConcatDataset
 import copy
 import pandas as pd
@@ -23,12 +23,13 @@ import warnings
 import argparse
 warnings.filterwarnings("ignore", category=UserWarning)
 
+
 def collate_events(batch):
     """Collate function to handle dictionary outputs from EventDataset."""
     # Separate waveforms and other data
     data = torch.stack([item['data'] for item in batch]).float()  # Convert to float32
     # Ensure label is long for CrossEntropyLoss
-    labels = torch.tensor([item['labels'] for item in batch], dtype=torch.long) 
+    labels = torch.tensor([item['labels'] for item in batch], dtype=torch.float32) 
     
     # Collect metadata into lists
     metadata = {key: [item[key] for item in batch] 
@@ -74,7 +75,7 @@ def calculate_metrics(outputs, labels, return_all=False, num_classes=5):
     
     # Convert to numpy for sklearn metrics
     # For multi-class, we need predicted class indices
-    preds = torch.argmax(outputs, dim=1).cpu().numpy()
+    preds = (outputs > 0.5).float().cpu().numpy()
     labels_np = labels.cpu().numpy()
     
     # Calculate basic metrics
@@ -83,9 +84,9 @@ def calculate_metrics(outputs, labels, return_all=False, num_classes=5):
     # If requested, calculate additional metrics
     if return_all:
         # Calculate metrics for multi-class classification
-        precision = precision_score(labels_np, preds, average='macro', zero_division=0, labels=list(range(num_classes)))
-        recall = recall_score(labels_np, preds, average='macro', zero_division=0, labels=list(range(num_classes)))
-        f1 = f1_score(labels_np, preds, average='macro', zero_division=0, labels=list(range(num_classes)))
+        precision = precision_score(labels_np, preds, zero_division=0)
+        recall = recall_score(labels_np, preds, zero_division=0)
+        f1 = f1_score(labels_np, preds, zero_division=0)
         balanced_acc = balanced_accuracy_score(labels_np, preds)
         
         # Calculate confusion matrix for all classes
@@ -127,7 +128,7 @@ class Trainer():
 
         # Define loss function with optional class weighting
         use_weighted_loss = self.training_config.get('use_weighted_loss', False)
-        num_classes = 5  # Classes 0, 1, 2, 3, 4
+        num_classes = 2  # Classes 0, 1, 2, 3, 4
         
         # Log the class distribution
         if self.verbose:
@@ -149,20 +150,25 @@ class Trainer():
                 print(f"Using weighted loss with weights: {weight_str}")
             
             # Use CrossEntropyLoss with weights for multi-class classification
-            self.criterion = nn.CrossEntropyLoss(weight=class_weights, reduction="none", ignore_index=-1).to(self.device)
+            self.criterion = nn.BCEWithLogitsLoss(reduction="none").to(self.device)
         else:
             # Standard CrossEntropyLoss with ignore_index for -1 labels
-            self.criterion = nn.CrossEntropyLoss(reduction="none", ignore_index=-1).to(self.device)
+            self.criterion = nn.BCEWithLogitsLoss(reduction="none").to(self.device)
 
     def _init_data(self):
         self.training_dataset = []
         self.testing_dataset = []
         feature_path = self.data_config["feature_path"]
         feature_path_test = self.data_config["test_feature_path"]
-        training_files = glob.glob(os.path.join(feature_path, "*.npz"))
-        # training_files = training_files[:2]
-        for training_file in tqdm(training_files, desc="Loading training files"):
-            new_dataset = ChannelDataset(training_file,  flip=self.training_config["flip"], downsample=True)
+        positive_files = glob.glob(os.path.join(feature_path, "positive", "*.npz"))
+        negative_files = glob.glob(os.path.join(feature_path, "negative", "*.npz"))
+        # positive_files = positive_files[:2]
+        # negative_files = negative_files[:2]
+        for positive_file in tqdm(positive_files, desc="Loading positive files"):
+            new_dataset = ChannelDataset(positive_file,  flip=self.training_config["flip"])
+            self.training_dataset.append(new_dataset)
+        for negative_file in tqdm(negative_files, desc="Loading negative files"):
+            new_dataset = ChannelDataset(negative_file,  flip=False)
             self.training_dataset.append(new_dataset)
         self.training_dataset = ConcatDataset(self.training_dataset)
         if self.verbose: print(f"Total training samples: {len(self.training_dataset)}")
@@ -170,7 +176,7 @@ class Trainer():
         testing_files = glob.glob(os.path.join(feature_path_test, "*.npz"))
         # testing_files = testing_files[:2]
         for testing_file in tqdm(testing_files, desc="Loading testing files"):
-            new_dataset = ChannelDataset(testing_file, flip=False, downsample=True)
+            new_dataset = ChannelDataset(testing_file, flip=False)
             self.testing_dataset.append(new_dataset)
         self.testing_dataset = ConcatDataset(self.testing_dataset)
         if self.verbose: print(f"Total testing samples: {len(self.testing_dataset)}")
@@ -179,7 +185,7 @@ class Trainer():
         if self.verbose: print("Computing class distribution for training data...")
         self.class_counts = self._compute_class_distribution(self.training_dataset)
         if self.verbose: 
-             print("Computed class distribution")
+            print(f"Computed class distribution - Positive: {self.class_counts[1]}, Negative: {self.class_counts[0]}")
 
     def _compute_class_distribution(self, dataset_or_loader, num_classes=5):
         """
@@ -262,7 +268,7 @@ class Trainer():
         batch_size = self.training_config["batch_size"]
         num_workers = self.training_config.get("num_workers", 0)
         val_split_ratio = self.training_config.get("validation_split_ratio", 0.2)
-        num_classes = 5  # Classes 0, 1, 2, 3, 4
+        num_classes = 2  # Classes 0, 1, 2, 3, 4
         
         total_train_size = len(self.training_dataset)
         if total_train_size == 0:
@@ -308,7 +314,7 @@ class Trainer():
             # Skip -1 labels (they should be ignored in sampling)
             samples_weight = torch.zeros(len(all_labels))
             for i in range(len(all_labels)):
-                label = all_labels[i].long()
+                label = all_labels[i]
                 if label >= 0 and label < num_classes:  # Valid class label
                     samples_weight[i] = class_weights[label]
                 # Weights for -1 labels remain 0
@@ -377,7 +383,7 @@ class Trainer():
         """Compute and display the distribution of labels in training and testing datasets."""
         if self.verbose: print("\n--- Label Distribution Analysis ---")
         
-        num_classes = 5  # Number of classes to analyze
+        num_classes = 2  # Number of classes to analyze
         
         # Create dataloaders for analysis
         train_all_loader = DataLoader(
@@ -472,8 +478,7 @@ class Trainer():
         all_labels = []
         for batch in train_iterator:
             waveforms = batch['data'].to(self.device)
-            # For CrossEntropyLoss, labels should be of type Long
-            labels = batch['labels'].to(self.device).long() # Labels should be [batch_size]
+            labels = batch['labels'].to(self.device) # Labels should be [batch_size]
 
             # Apply preprocessing
             # Ensure preprocessing handles potential extra dimensions if needed
@@ -487,7 +492,7 @@ class Trainer():
 
             # CrossEntropyLoss expects raw logits (not squeezed)
             # The ignore_index in loss definition takes care of -1 labels
-            loss = self.criterion(outputs, labels)
+            loss = self.criterion(outputs.squeeze(), labels)
             
             # Reduce the loss before backprop (ignoring -1 labels)
             loss_reduced = loss.mean()  # Manually reduce to a scalar
@@ -497,7 +502,7 @@ class Trainer():
 
             # Calculate metrics - update to handle multi-class
             batch_loss = loss_reduced.item()  # Get mean loss for reporting
-            batch_accuracy = calculate_metrics(outputs, labels)
+            batch_accuracy = calculate_metrics(outputs, labels, num_classes=2)
 
             total_loss += batch_loss
             total_accuracy += batch_accuracy
@@ -511,7 +516,7 @@ class Trainer():
         all_outputs = torch.cat(all_outputs, dim=0)
         all_labels = torch.cat(all_labels, dim=0)
         # calculate accuracy
-        avg_accuracy = calculate_metrics(all_outputs, all_labels)
+        avg_accuracy = calculate_metrics(all_outputs, all_labels, num_classes=2)
         return avg_loss, avg_accuracy, all_outputs, all_labels
 
     def _evaluate(self, dataloader):
@@ -537,7 +542,7 @@ class Trainer():
             for batch in eval_iterator:
                 waveforms = batch['data'].to(self.device)
                 # Convert labels to long for CrossEntropyLoss
-                labels = batch['labels'].to(self.device).long()
+                labels = batch['labels'].to(self.device)
 
                 # Apply preprocessing
                 processed_waveforms = self.pre_processing(waveforms)
@@ -545,8 +550,12 @@ class Trainer():
                 # Forward pass - now expects [batch_size, num_classes]
                 outputs = self.model(processed_waveforms)
 
-                # CrossEntropyLoss handles -1 labels via ignore_index
-                loss = self.criterion(outputs, labels)
+                # filter out labels = -1, and corresponding outputs
+                valid_mask = labels != -1
+                outputs_valid = outputs[valid_mask]
+                labels_valid = labels[valid_mask]
+                # Calculate loss
+                loss = self.criterion(outputs_valid.squeeze(1) if outputs_valid.dim() > 1 else outputs_valid, labels_valid)
                 
                 # Calculate mean loss for this batch (excluding -1 labels)
                 batch_loss = loss.mean().item()
@@ -558,7 +567,7 @@ class Trainer():
                 all_metadata.append(batch['metadata']) # Store metadata dict
 
                 # Calculate batch metrics for display
-                batch_metrics = calculate_metrics(outputs, labels, return_all=True)
+                batch_metrics = calculate_metrics(outputs, labels, return_all=True, num_classes=2)
                 eval_iterator.set_postfix(
                     loss=batch_loss, 
                     acc=batch_metrics['accuracy'], 
@@ -573,16 +582,22 @@ class Trainer():
         all_labels = torch.cat(all_labels, dim=0) if all_labels else torch.empty(0)
         
         # Calculate overall metrics
-        metrics = calculate_metrics(all_outputs, all_labels, return_all=True)
+        metrics = calculate_metrics(all_outputs, all_labels, return_all=True, num_classes=2)
         
         # Combine metadata (this part might need adjustment based on how you want to use it)
         combined_metadata = {k: [item for sublist in [m[k] for m in all_metadata] for item in sublist]
                              for k in all_metadata[0].keys()} if all_metadata else {}
                              
-        # For multi-class, predictions are class indices (argmax)
-        pred_values = torch.argmax(all_outputs, dim=1).numpy()
-        true_values = all_labels.numpy()
+        # Ensure outputs and labels are 1-dimensional before adding to metadata
+        pred_values = all_outputs.squeeze().numpy()
+        true_values = all_labels.squeeze().numpy()
         
+        # Check if values are still multi-dimensional and flatten if needed
+        if pred_values.ndim > 1:
+            pred_values = pred_values.flatten()
+        if true_values.ndim > 1:
+            true_values = true_values.flatten()
+            
         combined_metadata[f"channel_pred"] = pred_values
         combined_metadata[f"channel_true"] = true_values
 
@@ -592,9 +607,21 @@ class Trainer():
         """Main training loop."""
         since = time.time()
         best_loss = float('inf')
+        best_f1 = -float('inf')
         best_model_path = None
         output_dir = self.data_config.get("output_dir", ".") # Use output_dir from config
         os.makedirs(output_dir, exist_ok=True) # Ensure output directory exists
+
+        continue_train = False
+        if continue_train:
+            # the first 10 epoch was trained with MAML, second order 
+            # checkpoint_path = os.path.join(output_dir, "best_model.pth")
+            checkpoint_path = '/mnt/SSD1/nipsdataset/channel_training/channel_train_output/cnn/2025-05-13/run6/best_model.pth'
+            checkpoint = torch.load(checkpoint_path, map_location=self.device)
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            start_epoch = checkpoint['epoch'] + 1
+        else:
+            start_epoch = 0
 
         num_epochs = self.training_config.get("num_epochs", 10) # Get num_epochs from config
 
@@ -602,7 +629,8 @@ class Trainer():
             print(f"Starting training for {num_epochs} epochs...")
             print(f"Output directory: {output_dir}")
 
-        for epoch in range(num_epochs):
+        progress_bar = tqdm(range(start_epoch, num_epochs), initial=start_epoch, total=num_epochs)
+        for epoch in progress_bar:
             # Train one epoch
             train_loss, train_acc, _, _ = self._train_epoch()
 
@@ -619,7 +647,9 @@ class Trainer():
                 print("-" * 20)
 
             # Save the best model based on validation loss
-            if self.val_loader and val_loss < best_loss:
+            # if self.val_loader and val_loss < best_loss:
+            if self.val_loader and val_metrics['f1'] > best_f1:
+                best_f1 = val_metrics['f1']
                 best_loss = val_loss
                 best_model_path = os.path.join(output_dir, "best_model.pth")
                 # Save model state_dict and potentially preprocessing state if needed
@@ -664,33 +694,34 @@ class Trainer():
         test_loss, test_metrics, test_outputs, test_labels, test_metadata = self._evaluate(self.test_loader)
 
         if self.verbose:
-            num_classes = 5  # Number of classes (0, 1, 2, 3, 4)
             print("\n====== Test Results ======")
             print(f"Loss: {test_loss:.4f}")
             print(f"Accuracy: {test_metrics['accuracy']:.4f}")
             print(f"Balanced Accuracy: {test_metrics['balanced_accuracy']:.4f}")
-            print(f"Macro Precision: {test_metrics['precision']:.4f}")
-            print(f"Macro Recall: {test_metrics['recall']:.4f}")
-            print(f"Macro F1 Score: {test_metrics['f1']:.4f}")
+            print(f"Precision: {test_metrics['precision']:.4f}")
+            print(f"Recall: {test_metrics['recall']:.4f}")
+            print(f"F1 Score: {test_metrics['f1']:.4f}")
             
-            # Print confusion matrix with labels for multi-class
+            # Print confusion matrix with labels
             conf_matrix = test_metrics['confusion']
             print("\nConfusion Matrix:")
+            print("                Predicted")
+            print("                Neg    Pos")
+            print(f"Actual Neg    {conf_matrix[0, 0]:<6} {conf_matrix[0, 1]:<6}")
+            print(f"      Pos    {conf_matrix[1, 0]:<6} {conf_matrix[1, 1]:<6}")
             
-            # Print header
-            print("          |", end="")
-            for i in range(num_classes):
-                print(f"  Pred {i}  |", end="")
-            print("\n----------|" + "----------|" * num_classes)
-            
-            # Print each row
-            for i in range(num_classes):
-                print(f"True {i}   |", end="")
-                for j in range(num_classes):
-                    print(f"  {conf_matrix[i, j]:<6}  |", end="")
-                print()
-            
-            print("\n==========================")
+            # Calculate additional metrics from confusion matrix
+            tn, fp, fn, tp = conf_matrix.ravel()
+            specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+            npv = tn / (tn + fn) if (tn + fn) > 0 else 0
+            print(f"\nSpecificity: {specificity:.4f}")
+            print(f"Negative Predictive Value: {npv:.4f}")
+            print("==========================")
+
+        # Ensure all arrays in the metadata are 1D before creating DataFrame
+        for key, values in test_metadata.items():
+            if isinstance(values, np.ndarray) and values.ndim > 1:
+                test_metadata[key] = values.flatten()
 
         # Create a separate metrics dictionary
         metrics_dict = {
@@ -717,12 +748,12 @@ class Trainer():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_name", type=str, required=True, choices=["cnn", "vit", "lstm", "transformer, patchtst"], help="Model name (cnn, vit, lstm, transformer, timesnet, patchtst)")
+    parser.add_argument("--model_name", type=str, required=True, choices=["cnn", "ast", "seegnet", "clap"], help="Model name (cnn, ast, seegnet, clap)")
     parser.add_argument("--device", type=str, required=True, help="Device")
     parser.add_argument("--base_output_dir", type=str, required=True, help="Base output directory")
-    parser.add_argument("--feature_path", type=str, required=True, help="Path to the training features, generated by omni_ieeg.exploratory_model.model_train.features.py")
-    parser.add_argument("--test_feature_path", type=str, required=True, help="Path to the testing features, generated by omni_ieeg.exploratory_model.model_train.features_inference.py")
-    parser.add_argument("--num_epochs", type=int, default=10, help="Number of epochs")
+    parser.add_argument("--feature_path", type=str, required=True, help="Path to the training features, generated by omni_ieeg.channel_model.channel_model_train.features.py")
+    parser.add_argument("--test_feature_path", type=str, required=True, help="Path to the testing features, generated by omni_ieeg.channel_model.channel_model_train.features_inference.py")
+    parser.add_argument("--num_epochs", type=int, default=5, help="Number of epochs")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     parser.add_argument("--learning_rate", type=float, default=0.0003, help="Learning rate")
     parser.add_argument("--seed", type=int, default=42, help="Seed")
@@ -732,12 +763,8 @@ if __name__ == "__main__":
     parser.add_argument("--validation_split_ratio", type=float, default=0.2, help="Validation split ratio")
     parser.add_argument("--use_weighted_sampling", type=bool, default=True, help="Use weighted sampling during training")
     parser.add_argument("--use_weighted_loss", type=bool, default=False, help="Use weighted loss function")
-    
     args = parser.parse_args()
-    
-    
-    
-    model_name = args.model_name # cnn, vit, lstm, transformer, timesnet, patchtst
+    model_name = args.model_name
     device = args.device
     base_output_dir = args.base_output_dir
     os.makedirs(base_output_dir, exist_ok=True)
@@ -785,7 +812,7 @@ if __name__ == "__main__":
     trainer = Trainer(data_config, model_config, pre_processing_config, training_config)
     
     # Save the actual class distribution to the config files
-    for i in range(5):
+    for i in range(2):
         data_config[f"class_{i}_count"] = trainer.class_counts[i]
     data_config["ignored_count"] = trainer.class_counts[-1]
     
@@ -805,7 +832,6 @@ if __name__ == "__main__":
     
     # --- Start Training ---
     best_model_file = trainer.train()
-
     # --- Run Testing ---
     if best_model_file:
          print("\n--- Testing Best Model ---")

@@ -105,7 +105,7 @@ Then, you can use `omni_ieeg/channel_model_train/train.py` to train your model u
 To evaluate the model, you can use `omni_ieeg/channel_model/benchmark/evaluation_channel.py` to perform the evaluation on segment-based models, and use `omni_ieeg/channel_model/benchmark/evaluation_event.py` to perform the evaluation on event-based models.
 
 ### Exploratory Tasks
-There many potential tasks you can perform on the dataset. We provide a example anatomical location classification tasks in `omni_ieeg/exploratory_model`. It contains very similar structure as in the channel-level model. 
+There many potential tasks you can perform on the dataset. We provide script to run anatomical location classification tasks in `omni_ieeg/exploratory_model/anatomical` and ictal/interictal, sleep/awake classification tasks in `omni_ieeg/exploratory_model/ictal_sleep`. It contains very similar structure as in the channel-level model. 
 
 
 
