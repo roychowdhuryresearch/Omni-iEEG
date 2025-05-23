@@ -586,6 +586,13 @@ class Trainer():
         
         combined_metadata[f"channel_pred"] = pred_values
         combined_metadata[f"channel_true"] = true_values
+        #===================Add for Probs!
+        # Get probabilities via softmax
+        probs = torch.nn.functional.softmax(all_outputs, dim=1).numpy()
+        # Store probability for each class
+        num_classes = probs.shape[1]
+        for i in range(num_classes):
+            combined_metadata[f"prob_class_{i}"] = probs[:, i]
 
         return avg_loss, metrics, all_outputs, all_labels, combined_metadata
 
