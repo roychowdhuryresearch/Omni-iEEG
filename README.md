@@ -106,6 +106,7 @@ To evaluate the model, you can use `omni_ieeg/channel_model/benchmark/evaluation
 
 ### Exploratory Tasks
 There many potential tasks you can perform on the dataset. We provide script to run anatomical location classification tasks in `omni_ieeg/exploratory_model/anatomical` and ictal/interictal, sleep/awake classification tasks in `omni_ieeg/exploratory_model/ictal_sleep`. It contains very similar structure as in the channel-level model. 
+Please note that for anatomical location classification, we have provided the anatomical mapping file in the dataset's derivatives folder. For the ictal/interictal, sleep/awake classification, we have provided the split file in this repo, under `omni_ieeg/exploratory_model/ictal_sleep/`.
 
 
 
